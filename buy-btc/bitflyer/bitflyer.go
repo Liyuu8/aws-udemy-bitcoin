@@ -14,6 +14,8 @@ import (
 
 const baseURL = "https://api.bitflyer.com"
 const productCodeKey = "product_code"
+const btcMinimumAmount = 0.001 // bitflyerのBTC最小注文数量
+const btcMinimumAmountPlace = 4.0
 
 type APIClient struct {
 	apiKey    string
@@ -65,8 +67,8 @@ func (client *APIClient) getHeader(method, path string, body []byte) map[string]
 	}
 }
 
-// 新規注文機能
-func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
+// 新規注文作成
+func (client *APIClient) makeOrderResponse(order *Order) (*OrderRes, error) {
 	method := "POST"
 	path := "/v1/me/sendchildorder"
 	url := baseURL + path
@@ -93,6 +95,59 @@ func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
 	}
 
 	return &orderRes, nil
+}
+
+// 新規注文実行
+func (client *APIClient) PlaceOrder(price, size float64) (*OrderRes, error) {
+	order := Order{
+		ProductCode:     BtcJpy.String(),
+		ChildOrderType:  Limit.String(),
+		Side:            Buy.String(),
+		Price:           price,
+		Size:            size,
+		MinuteToExpires: 1440, // 1day
+		TimeInForce:     Gtc.String(),
+	}
+
+	orderRes, err := client.makeOrderResponse(&order)
+	if err != nil {
+		return nil, err
+	}
+
+	return orderRes, nil
+}
+
+// ロジックを取得する関数
+func GetBuyLogic(strategy int) func(float64, *Ticker) (float64, float64) {
+	var logic func(float64, *Ticker) (float64, float64)
+
+	// TODO: Add strategies
+	switch strategy {
+	case 1:
+		// LTP の 98.5% の価格で購入
+		logic = func(budget float64, ticker *Ticker) (float64, float64) {
+			buyPrice := utils.RoundDecimal(ticker.Ltp * 0.985)
+			buySize := utils.CalcAmount(buyPrice, budget, btcMinimumAmount, btcMinimumAmountPlace)
+
+			// TODO: Add currency pairs
+			// if ticker.ProductCode == BtcJpy.String() {
+			// 	xxx
+			// } else if ticker.ProductCode == EthJpy.String() {
+			// 	xxx
+			// }
+			return buyPrice, buySize
+		}
+	default:
+		// BestASK で購入
+		logic = func(budget float64, ticker *Ticker) (float64, float64) {
+			buyPrice := utils.RoundDecimal(ticker.BestAsk)
+			buySize := utils.CalcAmount(buyPrice, budget, btcMinimumAmount, btcMinimumAmountPlace)
+
+			return buyPrice, buySize
+		}
+	}
+
+	return logic
 }
 
 type Ticker struct {

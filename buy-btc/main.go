@@ -3,7 +3,6 @@ package main
 import (
 	"buy-btc/bitflyer"
 	"fmt"
-	"math"
 
 	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
@@ -37,17 +36,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return getErrorResponse(err.Error()), err
 	}
 
-	order := bitflyer.Order{
-		ProductCode:     bitflyer.BtcJpy.String(),
-		ChildOrderType:  bitflyer.Limit.String(),
-		Side:            bitflyer.Buy.String(),
-		Price:           math.Round(ticker.Ltp * 0.90), // 現在価格の90%
-		Size:            0.001,                         // 0.001BTC
-		MinuteToExpires: 1440,                          // 1day
-		TimeInForce:     bitflyer.Gtc.String(),
-	}
-
-	orderRes, err := client.PlaceOrder(&order)
+	price, size := bitflyer.GetBuyLogic(1)(4000.0, ticker)
+	orderRes, err := client.PlaceOrder(price, size)
 	if err != nil {
 		return getErrorResponse(err.Error()), err
 	}
