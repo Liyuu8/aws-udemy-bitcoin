@@ -15,6 +15,16 @@ import (
 const baseURL = "https://api.bitflyer.com"
 const productCodeKey = "product_code"
 
+type APIClient struct {
+	apiKey    string
+	apiSecret string
+}
+
+func NewAPIClient(apiKey, apiSecret string) *APIClient {
+	return &APIClient{apiKey, apiSecret}
+}
+
+// 価格取得機能
 func GetTicker(code ProductCode) (*Ticker, error) {
 	url := baseURL + "/v1/ticker"
 	res, err := utils.DoHttpRequest("GET", url, nil, map[string]string{productCodeKey: code.String()}, nil)
@@ -31,7 +41,27 @@ func GetTicker(code ProductCode) (*Ticker, error) {
 	return &ticker, nil
 }
 
-func PlaceOrder(order *Order, apiKey, apiSecret string) (*OrderRes, error) {
+func (client *APIClient) getHeader(method, path string, body []byte) map[string]string {
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+
+	// ACCESS-SIGN は、ACCESS-TIMESTAMP, HTTP メソッド, リクエストのパス, リクエストボディを
+	// 文字列として連結したものを、
+	sign := timestamp + method + path + string(body)
+	// API secret で HMAC-SHA256 署名を行った結果です。
+	mac := hmac.New(sha256.New, []byte(client.apiSecret))
+	mac.Write([]byte(sign))
+	encodedSign := hex.EncodeToString(mac.Sum(nil))
+
+	return map[string]string{
+		"ACCESS-KEY":       client.apiKey,
+		"ACCESS-TIMESTAMP": timestamp,
+		"ACCESS-SIGN":      encodedSign,
+		"Content-Type":     "application/json",
+	}
+}
+
+// 新規注文機能
+func (client *APIClient) PlaceOrder(order *Order) (*OrderRes, error) {
 	method := "POST"
 	path := "/v1/me/sendchildorder"
 	url := baseURL + path
@@ -40,7 +70,7 @@ func PlaceOrder(order *Order, apiKey, apiSecret string) (*OrderRes, error) {
 		return nil, err
 	}
 
-	header := getHeader(method, path, apiKey, apiSecret, data)
+	header := client.getHeader(method, path, data)
 
 	res, err := utils.DoHttpRequest(method, url, header, map[string]string{}, data)
 	if err != nil {
@@ -58,25 +88,6 @@ func PlaceOrder(order *Order, apiKey, apiSecret string) (*OrderRes, error) {
 	}
 
 	return &orderRes, nil
-}
-
-func getHeader(method, path, apiKey, apiSecret string, body []byte) map[string]string {
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-
-	// ACCESS-SIGN は、ACCESS-TIMESTAMP, HTTP メソッド, リクエストのパス, リクエストボディを
-	// 文字列として連結したものを、
-	sign := timestamp + method + path + string(body)
-	// API secret で HMAC-SHA256 署名を行った結果です。
-	mac := hmac.New(sha256.New, []byte(apiSecret))
-	mac.Write([]byte(sign))
-	encodedSign := hex.EncodeToString(mac.Sum(nil))
-
-	return map[string]string{
-		"ACCESS-KEY":       apiKey,
-		"ACCESS-TIMESTAMP": timestamp,
-		"ACCESS-SIGN":      encodedSign,
-		"Content-Type":     "application/json",
-	}
 }
 
 type Ticker struct {

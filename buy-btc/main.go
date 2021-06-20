@@ -23,6 +23,8 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		return getErrorResponse(err.Error()), err
 	}
 
+	client := bitflyer.NewAPIClient(apiKey, apiSecret)
+
 	ticker, err := bitflyer.GetTicker(bitflyer.BtcJpy)
 	if err != nil {
 		return events.APIGatewayProxyResponse{
@@ -37,11 +39,11 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 		Side:            bitflyer.Buy.String(),
 		Price:           math.Round(ticker.Ltp * 0.90), // 現在価格の90%
 		Size:            0.001,                         // 0.001BTC
-		MinuteToExpires: 4320,                          // 3days
+		MinuteToExpires: 1440,                          // 1day
 		TimeInForce:     bitflyer.Gtc.String(),
 	}
 
-	orderRes, err := bitflyer.PlaceOrder(&order, apiKey, apiSecret)
+	orderRes, err := client.PlaceOrder(&order)
 	if err != nil {
 		return getErrorResponse(err.Error()), err
 	}
