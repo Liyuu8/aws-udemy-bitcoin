@@ -25,12 +25,16 @@ func handler(request events.APIGatewayProxyRequest) (events.APIGatewayProxyRespo
 
 	client := bitflyer.NewAPIClient(apiKey, apiSecret)
 
-	ticker, err := bitflyer.GetTicker(bitflyer.BtcJpy)
+	tickerChan := make(chan *bitflyer.Ticker)
+	errChan := make(chan error)
+	defer close(tickerChan)
+	defer close(errChan)
+
+	go bitflyer.GetTicker(tickerChan, errChan, bitflyer.BtcJpy)
+	ticker := <-tickerChan
+	err = <-errChan
 	if err != nil {
-		return events.APIGatewayProxyResponse{
-			Body:       "Bad Request...",
-			StatusCode: 400,
-		}, nil
+		return getErrorResponse(err.Error()), err
 	}
 
 	order := bitflyer.Order{

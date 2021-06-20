@@ -25,20 +25,25 @@ func NewAPIClient(apiKey, apiSecret string) *APIClient {
 }
 
 // 価格取得機能
-func GetTicker(code ProductCode) (*Ticker, error) {
+func GetTicker(tickerChan chan *Ticker, errChan chan error, code ProductCode) {
 	url := baseURL + "/v1/ticker"
 	res, err := utils.DoHttpRequest("GET", url, nil, map[string]string{productCodeKey: code.String()}, nil)
 	if err != nil {
-		return nil, err
+		tickerChan <- nil
+		errChan <- err
+		return
 	}
 
 	var ticker Ticker
 	err = json.Unmarshal(res, &ticker)
 	if err != nil {
-		return nil, err
+		tickerChan <- nil
+		errChan <- err
+		return
 	}
 
-	return &ticker, nil
+	tickerChan <- &ticker
+	errChan <- nil
 }
 
 func (client *APIClient) getHeader(method, path string, body []byte) map[string]string {
